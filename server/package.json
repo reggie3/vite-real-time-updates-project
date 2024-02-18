@@ -3,9 +3,10 @@
   "module": "index.ts",
   "type": "module",
   "scripts": {
-    "hot": "bun --hot --env-file=./../.env index.ts",
+    "server": "bun --hot --env-file=./../.env index.ts",
     "watch": "bun --watch index.ts",
-    "migrate": "prisma migrate dev"
+    "migrate": "dotenv -e ./../.env -- prisma migrate dev"
+
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -15,6 +16,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@prisma/client": "^5.9.1"
+    "@prisma/client": "^5.9.1",
+    "dotenv-cli": "^7.3.0"
   }
 }

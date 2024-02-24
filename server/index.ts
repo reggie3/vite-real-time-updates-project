@@ -45,12 +45,15 @@ const handleTodos = async (req: Request) => {
         return new Response("Title is required!", { status: 400 });
       }
 
-      const { title } = body;
-      const todo = await prisma.todo.create({
-        data: {
-          title,
+      const todo = await prisma.todo.upsert({
+        where: {
+          id: body.id,
+        },
+        create: {
+          ...body,
           id: Math.random().toString(36).substring(7),
         },
+        update: body,
       });
       return new Response(JSON.stringify({ todo }), CORS_HEADERS);
 

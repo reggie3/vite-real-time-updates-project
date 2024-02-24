@@ -1,65 +1,33 @@
-import { useEffect, useState } from "react";
-import { Header } from "./components/header";
-import { Tasks } from "./components/tasks";
+import { RouterProvider, createRouter } from "@tanstack/react-router";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-const LOCAL_STORAGE_KEY = "todo:savedTasks"
+const queryClient = new QueryClient();
 
-function App() {
+// Import the generated route tree
+import { routeTree } from "./routeTree.gen";
+import { ThemeProvider } from "@emotion/react";
+import theme from "./theme";
+import { CssBaseline } from "@mui/material";
 
-  const [tasks, setTasks] = useState([])
+// Create a new router instance
+const router = createRouter({ routeTree });
 
-  function loadSavedTasks() {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY)
-    if (saved) {
-      setTasks(JSON.parse(saved))
-    }
+// Register the router instance for type safety
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: typeof router;
   }
-
-  useEffect(() => {
-    loadSavedTasks()
-  }, [])
-
-  function setTaskAndSave(newTasks) {
-    setTasks(newTasks)
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newTasks))
-  }
-
-  function addTask(taskTitle) {
-    setTaskAndSave([
-      ...tasks,
-      {
-        id: crypto.randomUUID(),
-        title: taskTitle,
-        isCompleted: false
-      }
-    ])
-  }
-
-  function toggleTaskCompletedById(taskId) {
-    const newTasks = tasks.map(task => {
-      if (task.id === taskId) {
-        return { ...task, isCompleted: !task.isCompleted }
-      }
-      return task
-    })
-    setTaskAndSave(newTasks)
-  }
-
-  function deleteTaskById(taskId) {
-    const newTasks = tasks.filter(task => task.id != taskId)
-    setTaskAndSave(newTasks)
-  }
-
-  return (
-    <>
-      <Header onAddTask={addTask} />
-      <Tasks
-        tasks={tasks}
-        onComplete={toggleTaskCompletedById}
-        onDelete={deleteTaskById}
-      />
-    </>
-  )
 }
 
-export default App
+function App() {
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </ThemeProvider>
+  );
+}
+
+export default App;

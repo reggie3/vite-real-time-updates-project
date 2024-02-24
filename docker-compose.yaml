@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.3.1
+    image: confluentinc/cp-zookeeper:7.3.2
     hostname: zookeeper
     container_name: zookeeper
     ports:
@@ -10,40 +10,65 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_SERVERS: zookeeper:2888:3888
     healthcheck:
       test: echo srvr | nc zookeeper 2181 || exit 1
       start_period: 10s
       retries: 20
       interval: 10s
-  broker:
-    image: confluentinc/cp-kafka:7.3.1
-    hostname: broker
-    container_name: broker
+  kafka:
+    image: confluentinc/cp-kafka:7.3.2
+    container_name: kafka
+    hostname: kafka
     depends_on:
-      zookeeper:
-        condition: service_healthy
+      - zookeeper
     ports:
-      - '29092:29092'
-      - '9092:9092'
-      - '9101:9101'
+      - "9092:9092"
+      - "29092:29092"
+      - "9999:9999"
     environment:
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9092,DOCKER://host.docker.internal:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,DOCKER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
       KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
-      KAFKA_JMX_PORT: 9101
-      KAFKA_JMX_HOSTNAME: localhost
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_JMX_PORT: 9999
+      KAFKA_JMX_HOSTNAME: ${DOCKER_HOST_IP:-127.0.0.1}
+      KAFKA_AUTHORIZER_CLASS_NAME: kafka.security.authorizer.AclAuthorizer
+      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "true"
     healthcheck:
-      test: nc -z localhost 9092 || exit -1
+      test: nc -z localhost 9094 || exit 1
       start_period: 15s
       interval: 5s
       timeout: 10s
       retries: 10
+  conduktor-platform:
+    #  access conduktor at http://localhost:10000  
+    image: conduktor/conduktor-platform:latest
+    ports:
+      - "10000:10000"
+    volumes:
+      - conduktor_data:/var/conduktor
+    environment:
+      CDK_USER: ${CDK_USER}
+      CDK_PASSWORD: ${CDK_PASSWORD}
+      CDK_DB: ${CDK_DB}
+      CDK_ORGANIZATION_NAME: "demo"
+      CDK_ADMIN_EMAIL: "admin@admin.io"
+      CDK_ADMIN_PASSWORD: "admin"
+      CDK_DATABASE_URL: ${CDK_DATABASE_URL}
+      CDK_CLUSTERS_0_ID: "default"
+      CDK_CLUSTERS_0_NAME: "My Local Kafka Cluster"
+      CDK_CLUSTERS_0_COLOR: "#0013E7"
+      CDK_CLUSTERS_0_BOOTSTRAPSERVERS: "PLAINTEXT://kafka:19092"
+      CDK_CLUSTERS_0_SCHEMAREGISTRY_URL: "http://kafka-schema-registry:8081"
+      CDK_CLUSTERS_0_KAFKACONNECTS_0_URL: "http://kafka-connect:8083"
+      CDK_CLUSTERS_0_KAFKACONNECTS_0_NAME: "full stack kafka connect"
   debezium:
     image: debezium/connect:latest
     restart: always
@@ -52,12 +77,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      broker:
+      kafka:
         condition: service_healthy
     ports:
       - '8083:8083'
     environment:
-      BOOTSTRAP_SERVERS: broker:29092
+      BOOTSTRAP_SERVERS: kafka:29092
       GROUP_ID: 1
       CONFIG_STORAGE_TOPIC: connect_configs
       STATUS_STORAGE_TOPIC: connect_statuses
@@ -80,41 +105,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  schema-registry:
-    image: confluentinc/cp-schema-registry:7.3.1
-    hostname: schema-registry
-    container_name: schema-registry
-    depends_on:
-      broker:
-        condition: service_healthy
-    ports:
-      - '8081:8081'
-    environment:
-      SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: broker:29092
-      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
-
-    healthcheck:
-      start_period: 10s
-      interval: 10s
-      retries: 20
-      test: curl --user superUser:superUser --fail --silent --insecure http://localhost:8081/subjects --output /dev/null || exit 1
-
-  rest-proxy:
-    image: confluentinc/cp-kafka-rest:7.3.1
-    depends_on:
-      broker:
-        condition: service_healthy
-    ports:
-      - '8082:8082'
-    hostname: rest-proxy
-    container_name: rest-proxy
-    environment:
-      KAFKA_REST_HOST_NAME: rest-proxy
-      KAFKA_REST_BOOTSTRAP_SERVERS: 'broker:29092'
-      KAFKA_REST_LISTENERS: 'http://0.0.0.0:8082'
-
+    volumes:
+      - ./connector.json:/connector.json  # Mount the connector.json file
+      - ./init-scripts/create-connector.sh:/docker-entrypoint-initdb.d/create-connector.sh  # Script to create the connector
   debezium-ui:
     image: debezium/debezium-ui:latest
     restart: always
@@ -127,6 +120,37 @@ services:
       - '8080:8080'
     environment:
       KAFKA_CONNECT_URIS: http://debezium:8083
+  kafka-schema-registry:
+    image: confluentinc/cp-schema-registry:7.3.2
+    hostname: kafka-schema-registry
+    container_name: kafka-schema-registry
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:19092
+      SCHEMA_REGISTRY_HOST_NAME: kafka-schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    depends_on:
+      - zookeeper
+      - kafka
+
+  
+  kafka-rest-proxy:
+    image: confluentinc/cp-kafka-rest:7.3.2
+    hostname: kafka-rest-proxy
+    container_name: kafka-rest-proxy
+    ports:
+      - "8082:8082"
+    environment:
+      # KAFKA_REST_ZOOKEEPER_CONNECT: zookeper:2181
+      KAFKA_REST_LISTENERS: http://0.0.0.0:8082/
+      KAFKA_REST_SCHEMA_REGISTRY_URL: http://kafka-schema-registry:8081/
+      KAFKA_REST_HOST_NAME: kafka-rest-proxy
+      KAFKA_REST_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:19092
+    depends_on:
+      - zookeeper
+      - kafka
+      - kafka-schema-registry
 
   postgres:
     image: postgres:latest
@@ -135,6 +159,8 @@ services:
     hostname: postgres
     ports:
       - '5432:5432'
+    env_file:
+      - .env
     environment:
       POSTGRES_USER: ${DATABASE_USER}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
@@ -146,18 +172,41 @@ services:
       timeout: 5s
       retries: 5
     volumes:
-      - ./scripts:/docker-entrypoint-initdb.d
-
-    #  access pgadmin at http://localhost:5050  
+      - postgres:/var/lib/postgresql/data
+      - ./init-scripts/init-database.sh:/docker-entrypoint-initdb.d/init-database.sh
+  #  access pgadmin at http://localhost:5050  
   pgadmin:
     image: dpage/pgadmin4
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
       PGADMIN_LISTEN_PORT: 80
+      PGADMIN_SERVER_NAME: ${PGADMIN_SERVER_NAME}
+      PGADMIN_SERVER_HOST: ${PGADMIN_SERVER_HOST}  # Use the service name as the host
+      PGADMIN_SERVER_PORT: 5432       # PostgreSQL default port
+      PGADMIN_SERVER_MAINTENANCE_DB: "postgres"
     ports:
       - "5050:80"
     depends_on:
       - postgres
     links:
       - postgres:postgres
+  # server:
+  #   container_name: server
+  #   build:
+  #     context: .
+  #     dockerfile: server/dockerfile.server.yaml  # Specify the path to your Dockerfile
+  #   command: ["npx", "prisma", "migrate", "deploy"]
+  #   volumes:
+  #     - ./server/prisma:/app/prisma
+  #   environment:
+  #     DATABASE_URL: "postgresql://user:password@postgres:5432/dbname"  # Replace with your database connection string
+  #   depends_on:
+  #     - postgres
+volumes:
+  postgres: {}
+  conduktor_data: {}
+# networks:
+#   default:
+#     name: bridge
+#     external: true

@@ -1,125 +1,54 @@
-version: '3.9'
+version: '2.1'
 
 services:
-  zookeeper:
+  zoo1:
     image: confluentinc/cp-zookeeper:7.3.2
-    hostname: zookeeper
-    container_name: zookeeper
+    hostname: zoo1
+    container_name: zoo1
     ports:
-      - '2181:2181'
+      - "2181:2181"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
       ZOOKEEPER_SERVER_ID: 1
-      ZOOKEEPER_SERVERS: zookeeper:2888:3888
-    healthcheck:
-      test: echo srvr | nc zookeeper 2181 || exit 1
-      start_period: 10s
-      retries: 20
-      interval: 10s
-  kafka:
+      ZOOKEEPER_SERVERS: zoo1:2888:3888
+
+  kafka1:
     image: confluentinc/cp-kafka:7.3.2
-    container_name: kafka
-    hostname: kafka
-    depends_on:
-      - zookeeper
+    hostname: kafka1
+    container_name: kafka1
     ports:
       - "9092:9092"
       - "29092:29092"
       - "9999:9999"
     environment:
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9092,DOCKER://host.docker.internal:29092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19092,EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9092,DOCKER://host.docker.internal:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,DOCKER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_ZOOKEEPER_CONNECT: "zoo1:2181"
       KAFKA_BROKER_ID: 1
       KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_JMX_PORT: 9999
+      KAFKA_JMX_PORT: 9001
       KAFKA_JMX_HOSTNAME: ${DOCKER_HOST_IP:-127.0.0.1}
       KAFKA_AUTHORIZER_CLASS_NAME: kafka.security.authorizer.AclAuthorizer
       KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "true"
     healthcheck:
-      test: nc -z localhost 9094 || exit 1
+      test: nc -z localhost 9092 || exit 1
       start_period: 15s
       interval: 5s
       timeout: 10s
       retries: 10
-  conduktor-platform:
-    #  access conduktor at http://localhost:10000  
-    image: conduktor/conduktor-platform:latest
-    ports:
-      - "10000:10000"
-    volumes:
-      - conduktor_data:/var/conduktor
-    environment:
-      CDK_USER: ${CDK_USER}
-      CDK_PASSWORD: ${CDK_PASSWORD}
-      CDK_DB: ${CDK_DB}
-      CDK_ORGANIZATION_NAME: "demo"
-      CDK_ADMIN_EMAIL: "admin@admin.io"
-      CDK_ADMIN_PASSWORD: "admin"
-      CDK_DATABASE_URL: ${CDK_DATABASE_URL}
-      CDK_CLUSTERS_0_ID: "default"
-      CDK_CLUSTERS_0_NAME: "My Local Kafka Cluster"
-      CDK_CLUSTERS_0_COLOR: "#0013E7"
-      CDK_CLUSTERS_0_BOOTSTRAPSERVERS: "PLAINTEXT://kafka:19092"
-      CDK_CLUSTERS_0_SCHEMAREGISTRY_URL: "http://kafka-schema-registry:8081"
-      CDK_CLUSTERS_0_KAFKACONNECTS_0_URL: "http://kafka-connect:8083"
-      CDK_CLUSTERS_0_KAFKACONNECTS_0_NAME: "full stack kafka connect"
+
   debezium:
     image: debezium/connect:latest
     restart: always
     container_name: debezium
     hostname: debezium
     depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-    ports:
-      - '8083:8083'
-    environment:
-      BOOTSTRAP_SERVERS: kafka:29092
-      GROUP_ID: 1
-      CONFIG_STORAGE_TOPIC: connect_configs
-      STATUS_STORAGE_TOPIC: connect_statuses
-      OFFSET_STORAGE_TOPIC: connect_offsets
-      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      ENABLE_DEBEZIUM_SCRIPTING: 'true'
-    healthcheck:
-      test:
-        [
-          'CMD',
-          'curl',
-          '--silent',
-          '--fail',
-          '-X',
-          'GET',
-          'http://localhost:8083/connectors',
-        ]
-      start_period: 10s
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    volumes:
-      - ./connector.json:/connector.json  # Mount the connector.json file
-      - ./init-scripts/create-connector.sh:/docker-entrypoint-initdb.d/create-connector.sh  # Script to create the connector
-  debezium-ui:
-    image: debezium/debezium-ui:latest
-    restart: always
-    container_name: debezium-ui
-    hostname: debezium-ui
-    depends_on:
-      debezium:
-        condition: service_healthy
-    ports:
-      - '8080:8080'
-    environment:
-      KAFKA_CONNECT_URIS: http://debezium:8083
+      - zoo1
+
   kafka-schema-registry:
     image: confluentinc/cp-schema-registry:7.3.2
     hostname: kafka-schema-registry
@@ -127,12 +56,12 @@ services:
     ports:
       - "8081:8081"
     environment:
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:19092
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka1:19092
       SCHEMA_REGISTRY_HOST_NAME: kafka-schema-registry
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
     depends_on:
-      - zookeeper
-      - kafka
+      - zoo1
+      - kafka1
 
   
   kafka-rest-proxy:
@@ -142,15 +71,72 @@ services:
     ports:
       - "8082:8082"
     environment:
-      # KAFKA_REST_ZOOKEEPER_CONNECT: zookeper:2181
+      # KAFKA_REST_ZOOKEEPER_CONNECT: zoo1:2181
       KAFKA_REST_LISTENERS: http://0.0.0.0:8082/
       KAFKA_REST_SCHEMA_REGISTRY_URL: http://kafka-schema-registry:8081/
       KAFKA_REST_HOST_NAME: kafka-rest-proxy
-      KAFKA_REST_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:19092
+      KAFKA_REST_BOOTSTRAP_SERVERS: PLAINTEXT://kafka1:19092
     depends_on:
-      - zookeeper
-      - kafka
+      - zoo1
+      - kafka1
       - kafka-schema-registry
+
+  
+  kafka-connect:
+    image: confluentinc/cp-kafka-connect:7.3.2
+    hostname: kafka-connect
+    container_name: kafka-connect
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: "kafka1:19092"
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: compose-connect-group
+      CONNECT_CONFIG_STORAGE_TOPIC: docker-connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: docker-connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: docker-connect-status
+      CONNECT_KEY_CONVERTER: io.confluent.connect.avro.AvroConverter
+      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: 'http://kafka-schema-registry:8081'
+      CONNECT_VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: 'http://kafka-schema-registry:8081'
+      CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_REST_ADVERTISED_HOST_NAME: "kafka-connect"
+      CONNECT_LOG4J_ROOT_LOGLEVEL: "INFO"
+      CONNECT_LOG4J_LOGGERS: "org.apache.kafka.connect.runtime.rest=WARN,org.reflections=ERROR"
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_PLUGIN_PATH: '/usr/share/java,/etc/kafka-connect/jars,/usr/share/confluent-hub-components'
+    volumes:
+      - ./connectors:/etc/kafka-connect/jars/
+    depends_on:
+      - zoo1
+      - kafka1
+      - kafka-schema-registry
+      - kafka-rest-proxy
+    command:
+      - bash
+      - -c
+      - |
+        confluent-hub install --no-prompt debezium/debezium-connector-postgres:latest
+        confluent-hub install --no-prompt confluentinc/kafka-connect-datagen:0.4.0
+        /etc/confluent/docker/run
+
+  
+  ksqldb-server:
+    image: confluentinc/cp-ksqldb-server:7.3.2
+    hostname: ksqldb-server
+    container_name: ksqldb-server
+    ports:
+      - "8088:8088"
+    environment:
+      KSQL_BOOTSTRAP_SERVERS: PLAINTEXT://kafka1:19092
+      KSQL_LISTENERS: http://0.0.0.0:8088/
+      KSQL_KSQL_SERVICE_ID: ksqldb-server_
+    depends_on:
+      - zoo1
+      - kafka1
 
   postgres:
     image: postgres:latest
@@ -172,7 +158,7 @@ services:
       timeout: 5s
       retries: 5
     volumes:
-      - postgres:/var/lib/postgresql/data
+      - pg_data:/var/lib/postgresql/data
       - ./init-scripts/init-database.sh:/docker-entrypoint-initdb.d/init-database.sh
   #  access pgadmin at http://localhost:5050  
   pgadmin:
@@ -191,22 +177,43 @@ services:
       - postgres
     links:
       - postgres:postgres
-  # server:
-  #   container_name: server
-  #   build:
-  #     context: .
-  #     dockerfile: server/dockerfile.server.yaml  # Specify the path to your Dockerfile
-  #   command: ["npx", "prisma", "migrate", "deploy"]
+            
+  kafka-ui:
+    container_name: kafka-ui
+    image: provectuslabs/kafka-ui:latest
+    depends_on:
+      - kafka1
+      - kafka-schema-registry
+      - kafka-connect
+    ports:
+      - 8080:8080
+    environment:
+      DYNAMIC_CONFIG_ENABLED: 'true'
+    volumes:
+      - ~/kui/config.yml:/etc/kafkaui/dynamic_config.yaml
+  # conduktor-platform:
+  #   #  access conduktor at http://localhost:8080  
+  #   image: conduktor/conduktor-platform:latest
+  #   ports:
+  #     - "8080:8080"
   #   volumes:
-  #     - ./server/prisma:/app/prisma
+  #     - conduktor_data:/var/conduktor
   #   environment:
-  #     DATABASE_URL: "postgresql://user:password@postgres:5432/dbname"  # Replace with your database connection string
-  #   depends_on:
-  #     - postgres
+  #     CDK_USER: ${CDK_USER}
+  #     CDK_PASSWORD: ${CDK_PASSWORD}
+  #     CDK_DB: ${CDK_DB}
+  #     CDK_ORGANIZATION_NAME: "demo"
+  #     CDK_ADMIN_EMAIL: "admin@admin.io"
+  #     CDK_ADMIN_PASSWORD: "admin"
+  #     CDK_DATABASE_URL: ${CDK_DATABASE_URL}
+  #     CDK_CLUSTERS_0_ID: "default"
+  #     CDK_CLUSTERS_0_NAME: "My Local Kafka Cluster"
+  #     CDK_CLUSTERS_0_COLOR: "#0013E7"
+  #     CDK_CLUSTERS_0_BOOTSTRAPSERVERS: "PLAINTEXT://kafka:19092"
+  #     CDK_CLUSTERS_0_SCHEMAREGISTRY_URL: "http://kafka-schema-registry:8081"
+  #     CDK_CLUSTERS_0_KAFKACONNECTS_0_URL: "http://kafka-connect:8083"
+  #     CONFIG_STORAGE_TOPIC: docker-connect-configs
+  
 volumes:
-  postgres: {}
+  pg_data: {}
   conduktor_data: {}
-# networks:
-#   default:
-#     name: bridge
-#     external: true

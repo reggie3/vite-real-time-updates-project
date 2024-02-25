@@ -1,0 +1,13 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "vite-real-time-updates-project",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "postgres",
+      "Username": "postgres",
+      "PassFile": "/pgpass"
+    }
+  }
+}

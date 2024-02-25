@@ -1,26 +1,35 @@
 #!/bin/bash
 set -e
 
-echo "Creating Conduktor user and database in PostgreSQL..."
+echo "Setting up Pgadmin..."
 
 # Ensure the necessary environment variables are set
-if [ -z "$POSTGRES_USER" ] || [ -z "$CDK_DB" ] || [ -z "$CDK_USER" ] || [ -z "$CDK_PASSWORD" ]; then
-  echo "ERROR: Missing required environment variables."
+if [ -z "$POSTGRES_USER" ]; then
+  echo "ERROR: Missing required environment variable POSTGRES_USER."
+  exit 1
+fi
+
+if [ -z "$POSTGRES_PASSWORD" ]; then
+  echo "ERROR: Missing required environment variable POSTGRES_PASSWORD."
+  exit 1
+fi
+
+if [ -z "$DATABASE_NAME" ]; then
+  echo "ERROR: Missing required environment variable DATABASE_NAME."
   exit 1
 fi
 
 echo "PostgreSQL User: $POSTGRES_USER"
-echo "Conduktor Database: $CDK_DB"
-echo "Conduktor User: $CDK_USER"
+echo "PostgreSQL Password: $POSTGRES_PASSWORD"
+echo "PostgreSQL Database: $DATABASE_NAME"
 
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
-  CREATE DATABASE $CDK_DB;
-EOSQL
+# Perform the necessary PostgreSQL setup commands here
+# For example:
+# psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$DATABASE_NAME" <<-EOSQL
+#   CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';
+#   CREATE DATABASE $DATABASE_NAME;
+#   GRANT ALL PRIVILEGES ON DATABASE $DATABASE_NAME TO $POSTGRES_USER;
+#   ALTER USER $POSTGRES_USER CREATEDB;
+# EOSQL
 
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$CDK_DB" <<-EOSQL
-  CREATE USER $CDK_USER WITH PASSWORD '$CDK_PASSWORD';
-  GRANT ALL PRIVILEGES ON DATABASE $CDK_DB TO $CDK_USER;
-  ALTER USER $CDK_USER CREATEDB;
-EOSQL
-
-echo "Conduktor user and database creation complete."
+echo "PgAdmin setup complete."

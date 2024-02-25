@@ -54,7 +54,7 @@ services:
     environment:
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka1:19092
       SCHEMA_REGISTRY_HOST_NAME: kafka-schema-registry
-      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_LISTENERS: http://kafka-schema-registry:8081,http://localhost:8081
     depends_on:
       - zoo1
       - kafka1
@@ -144,8 +144,8 @@ services:
     env_file:
       - .env
     environment:
-      POSTGRES_USER: ${DATABASE_USER}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${DATABASE_NAME}
     command: ['postgres', '-c', 'wal_level=logical']
     healthcheck:
@@ -156,9 +156,11 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./init-scripts/init-database.sh:/docker-entrypoint-initdb.d/init-database.sh
+ 
   #  access pgadmin at http://localhost:5050  
   pgadmin:
     image: dpage/pgadmin4
+    container_name: pgadmin
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
@@ -167,15 +169,25 @@ services:
       PGADMIN_SERVER_HOST: ${PGADMIN_SERVER_HOST}  # Use the service name as the host
       PGADMIN_SERVER_PORT: 5432       # PostgreSQL default port
       PGADMIN_SERVER_MAINTENANCE_DB: "postgres"
+      # PGADMIN_CONFIG_SERVER_MODE: False
+      # PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: False
     ports:
       - "5050:80"
     depends_on:
       - postgres
     links:
       - postgres:postgres
+    entrypoint: /bin/sh -c "chmod 600 /pgpass; /entrypoint.sh;"
+    user: root
+    configs:
+      - source: servers.json
+        target: /pgadmin4/servers.json
+      - source: pgpass
+        target: /pgpass
 
   kafka-ui:
     hostname: kafka-ui
+    container_name: kafka-ui
     image: provectuslabs/kafka-ui:master
     ports:
       - 8085:8080
@@ -189,42 +201,92 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka1:19092
       KAFKA_CLUSTERS_0_ZOOKEEPER: zoo1:2181
     
-  # debezium:
-  #   image: debezium/connect:latest
-  #   restart: always
-  #   container_name: debezium
-  #   hostname: debezium
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     kafka1:
-  #       condition: service_healthy
-  #   ports:
-  #     - '8093:8083'
-  #   environment:
-  #     BOOTSTRAP_SERVERS: broker:29092
-  #     GROUP_ID: 1
-  #     CONFIG_STORAGE_TOPIC: connect_configs
-  #     STATUS_STORAGE_TOPIC: connect_statuses
-  #     OFFSET_STORAGE_TOPIC: connect_offsets
-  #     KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-  #     VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-  #     ENABLE_DEBEZIUM_SCRIPTING: 'true'
-  #   healthcheck:
-  #     test:
-  #       [
-  #         'CMD',
-  #         'curl',
-  #         '--silent',
-  #         '--fail',
-  #         '-X',
-  #         'GET',
-  #         'http://localhost:8093/connectors',
-  #       ]
-  #     start_period: 10s
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
+  debezium:
+    image: debezium/connect:latest
+    restart: always
+    container_name: debezium
+    hostname: debezium
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka1:
+        condition: service_healthy
+    ports:
+      - '8093:8083'
+    environment:
+      BOOTSTRAP_SERVERS: kafka1:19092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: connect_configs
+      STATUS_STORAGE_TOPIC: connect_statuses
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      ENABLE_DEBEZIUM_SCRIPTING: 'true'
+      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: 'http://kafka-schema-registry:8081'
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: 'http://kafka-schema-registry:8081'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'curl',
+          '--silent',
+          '--fail',
+          '-X',
+          'GET',
+          'http://localhost:8083/connectors',
+        ]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ./debezium-debezium-connector-postgresql-2.2.1/lib/debezium-connector-postgres-2.2.1.Final.jar:/kafka-connect-plugins/debezium-connector-postgres-2.2.1.jar
+      - ./connector.json:/connector.json  # Mount the connector.json file
+      - ./init-scripts/create-connector.sh:/docker-entrypoint-initdb.d/create-connector.sh  # Script to create the connector
+
+      # - ./path/to/debezium-connector-postgres:/connector-plugins  # Connector plugin volume
+      # - ./connector.json:/connector.json  # Mount the connector.json file
+      # - ./init-scripts/create-connector.sh:/docker-entrypoint-initdb.d/create-connector.sh  # Script to create the connector
+
+  debezium-ui:
+    image: debezium/debezium-ui:latest
+    container_name: debezium-ui
+    restart: always
+    hostname: debezium-ui
+    depends_on:
+      debezium:
+        condition: service_healthy
+    ports:
+      - '8080:8080'
+    environment:
+      KAFKA_CONNECT_URIS: http://debezium:8083
+
+  migrate-database:
+    image: oven/bun:slim
+    container_name: migrate-database
+    depends_on:
+      - pgadmin
+    volumes:
+      - ./server:/app # Assuming your package.json is in the 'server' directory
+    working_dir: /app
+    command: [ "bun", "migrate"]
+
 
 volumes:
   pg_data: {}
+
+configs:
+  pgpass:
+    content: ${PGADMIN_SERVER_HOST}:5432:*:postgres:postgres
+  servers.json:
+    content: |
+      {"Servers": {"1": {
+        "Group": "Servers",
+        "Name": "vite-real-time-updates",
+        "Host": "postgres",
+        "Port": 5432,
+        "MaintenanceDB": "postgres",
+        "Username": "postgres",
+        "PassFile": "/pgpass",
+        "SSLMode": "prefer"
+      }}}

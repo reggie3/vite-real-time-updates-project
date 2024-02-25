@@ -47,7 +47,7 @@ const handleTodos = async (req: Request) => {
 
       const todo = await prisma.todo.upsert({
         where: {
-          id: body.id,
+          id: body.id ? body.id : "0",
         },
         create: {
           ...body,

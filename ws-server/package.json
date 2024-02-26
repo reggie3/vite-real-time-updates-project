@@ -4,13 +4,14 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "watch": "dotenv -e ./../.env -- bun --watch index.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "dotenv-cli": "^7.3.0"
   },
   "dependencies": {
     "kafkajs": "^2.2.4"

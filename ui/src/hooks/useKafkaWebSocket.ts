@@ -1,8 +1,12 @@
 import { useEffect } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
 
+// Object.keys(import.meta.env).forEach((key) => {
+//   console.log(`${key}: ${import.meta.env[key]}`);
+// });
+
 const useKafkaWebSocket = () => {
-  const WS_URL = "ws://localhost:7789";
+  const WS_URL = import.meta.env.VITE_WEB_SOCKET_URL || "";
 
   const { sendJsonMessage, lastJsonMessage, readyState } = useWebSocket(
     WS_URL,
@@ -20,10 +24,11 @@ const useKafkaWebSocket = () => {
         event: "subscribe",
         data: {
           username: "your-username",
-          channel: "updates",
+          channel: import.meta.env.VITE_WEB_SOCKET_UPDATE_CHANNEL || "",
         },
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readyState]);
 
   // Run when a new WebSocket message is received (lastJsonMessage)

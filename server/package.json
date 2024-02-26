@@ -7,17 +7,16 @@
     "watch": "bun --watch index.ts",
     "migrate": "dotenv -e ./../.env -- prisma migrate dev",
     "generate-types": "pal schema typescript"
-
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "prisma": "^5.9.1"
+    "dotenv-cli": "^7.3.0"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
   },
   "dependencies": {
     "@prisma/client": "^5.9.1",
-    "dotenv-cli": "^7.3.0"
+    "prisma": "^5.9.1"
   }
 }

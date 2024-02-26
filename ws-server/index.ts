@@ -1,5 +1,6 @@
 import type { Server, ServerWebSocket } from "bun";
 import { Kafka, logLevel } from "kafkajs";
+import { exit } from "process";
 
 const kafka = new Kafka({
   clientId: "web-socket-server",
@@ -9,8 +10,14 @@ const kafka = new Kafka({
 
 const consumer = kafka.consumer({ groupId: "my-group" });
 const topic = "postgres.public.Todo";
+const updateChannel = process.env.VITE_WEB_SOCKET_UPDATE_CHANNEL;
 
-console.log(process.env);
+if (!updateChannel) {
+  console.error("VITE_WEB_SOCKET_UPDATE_CHANNEL is not set");
+  exit(1);
+}
+console.log("updateChannel is", updateChannel);
+
 const wsServer = Bun.serve({
   fetch(req, server) {
     // upgrade the request to a WebSocket
@@ -25,19 +32,25 @@ const wsServer = Bun.serve({
       ws: ServerWebSocket<unknown>,
       message: string | Buffer
     ): void | Promise<void> {
-      ws.publish("update", `received message`);
+      const messageString =
+        typeof message === "string" ? message : message.toString();
+      const parsedMessage = JSON.parse(messageString);
+      if (parsedMessage.event === "subscribe") {
+        ws.subscribe(updateChannel);
+        console.log(messageString);
+        ws.send(JSON.stringify({ message: "Subscribed" }));
+      }
+      ws.publish(updateChannel, message);
     },
     open(ws) {
       console.log("connection opened");
       console.log(JSON.stringify(wsServer, null, 2));
-      const msg = ` has entered the chat`;
-      ws.subscribe("the-group-chat");
-      wsServer.publish("the-group-chat", msg);
+
+      ws.send(JSON.stringify({ mesage: ":wave: Hello there!" }));
+      // wsServer?.publish(updateChannel, JSON.stringify({ message: "TEST" }));
     },
     close(ws) {
       console.log("connection closed");
-      const msg = ` has left the chat`;
-      wsServer.publish("the-group-chat", msg);
     },
   }, // handlers
 });
@@ -53,13 +66,17 @@ async function intiKafka() {
         // console.log(`Received message on topic ${topic}`);
         // Handle the Kafka message as needed in your application
         if (!wsServer) {
-          console.log("*** No wsServer ***");
+          console.log("ERROR: wsServer is not set");
+        }
+        if (!updateChannel) {
+          console.log("ERROR: updateChannel is not set");
         } else {
-          console.log("HERE asdfasdf31123412412df@");
-
+          console.log("publishing from ", topic, "to ", updateChannel);
           wsServer?.publish(
-            "updates",
-            `Received message on topic ${topic}, partition ${partition}: ${payload}`
+            updateChannel,
+            JSON.stringify({
+              message: `Received message on topic ${topic}, partition ${partition}: ${payload}`,
+            })
           );
         }
       }

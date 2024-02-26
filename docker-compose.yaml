@@ -243,11 +243,7 @@ services:
       - ./debezium-debezium-connector-postgresql-2.2.1/lib/debezium-connector-postgres-2.2.1.Final.jar:/kafka-connect-plugins/debezium-connector-postgres-2.2.1.jar
       - ./connector.json:/connector.json  # Mount the connector.json file
       - ./init-scripts/create-connector.sh:/docker-entrypoint-initdb.d/create-connector.sh  # Script to create the connector
-
-      # - ./path/to/debezium-connector-postgres:/connector-plugins  # Connector plugin volume
-      # - ./connector.json:/connector.json  # Mount the connector.json file
-      # - ./init-scripts/create-connector.sh:/docker-entrypoint-initdb.d/create-connector.sh  # Script to create the connector
-
+      
   debezium-ui:
     image: debezium/debezium-ui:latest
     container_name: debezium-ui

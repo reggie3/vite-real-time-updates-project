@@ -1,6 +1,8 @@
-import type { Server, ServerWebSocket } from "bun";
+import type { ServerWebSocket } from "bun";
 import { Kafka, logLevel } from "kafkajs";
 import { exit } from "process";
+import type { DebeziumMessage, TableUpdate } from "./globalTypes";
+import { isDebeziumMessage } from "./isDebeziumMessage";
 
 const kafka = new Kafka({
   clientId: "web-socket-server",
@@ -35,6 +37,7 @@ const wsServer = Bun.serve({
       const messageString =
         typeof message === "string" ? message : message.toString();
       const parsedMessage = JSON.parse(messageString);
+
       if (parsedMessage.event === "subscribe") {
         ws.subscribe(updateChannel);
         console.log(messageString);
@@ -60,24 +63,27 @@ async function intiKafka() {
   await consumer.subscribe({ topic, fromBeginning: true });
 
   await consumer.run({
-    eachMessage: async ({ topic, partition, message }) => {
-      const payload = message.value?.toString();
-      if (payload) {
-        // console.log(`Received message on topic ${topic}`);
-        // Handle the Kafka message as needed in your application
+    eachMessage: async ({ topic, message }) => {
+      const incomingMessage = JSON.parse(message.value?.toString() || "");
+      if (incomingMessage) {
         if (!wsServer) {
           console.log("ERROR: wsServer is not set");
+          return;
         }
         if (!updateChannel) {
           console.log("ERROR: updateChannel is not set");
-        } else {
+          return;
+        }
+
+        if (isDebeziumMessage(incomingMessage)) {
           console.log("publishing from ", topic, "to ", updateChannel);
-          wsServer?.publish(
-            updateChannel,
-            JSON.stringify({
-              message: `Received message on topic ${topic}, partition ${partition}: ${payload}`,
-            })
-          );
+          const tableUpdate: TableUpdate = {
+            tableName: topic.split(".")[2],
+            newData: incomingMessage.payload.after,
+            timeStampMilis: incomingMessage.payload.ts_ms,
+          };
+
+          wsServer?.publish(updateChannel, JSON.stringify(tableUpdate));
         }
       }
     },

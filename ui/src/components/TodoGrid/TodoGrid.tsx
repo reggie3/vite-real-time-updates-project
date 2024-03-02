@@ -22,9 +22,11 @@ const columns: GridColDef<Todo>[] = [
 const TodoGrid = () => {
   const { isLoading, data: todos } = useGetTodos();
 
-  const rows =
-    todos?.sort((a: Todo, b: Todo) => (a.createdAt > b.createdAt ? 1 : -1)) ??
-    [];
+  const rows = todos
+    ? [...todos]?.sort((a: Todo, b: Todo) =>
+        a.createdAt > b.createdAt ? 1 : -1
+      )
+    : [];
 
   return (
     <Card>

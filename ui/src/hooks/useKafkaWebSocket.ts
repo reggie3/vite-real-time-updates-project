@@ -1,11 +1,10 @@
 import { useEffect } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
-
-// Object.keys(import.meta.env).forEach((key) => {
-//   console.log(`${key}: ${import.meta.env[key]}`);
-// });
+import { isDebeziumMessage, isTableUpdate } from "../../isDebeziumMessage";
+import useQueryInvalidator from "./useQueryInvalidator";
 
 const useKafkaWebSocket = () => {
+  const invalidateQuery = useQueryInvalidator();
   const WS_URL = import.meta.env.VITE_WEB_SOCKET_URL || "";
 
   const { sendJsonMessage, lastJsonMessage, readyState } = useWebSocket(
@@ -33,10 +32,14 @@ const useKafkaWebSocket = () => {
 
   // Run when a new WebSocket message is received (lastJsonMessage)
   useEffect(() => {
-    console.log(
-      `Got a new message: ${JSON.stringify(lastJsonMessage, null, 2)}`
-    );
-  }, [lastJsonMessage]);
+    console.log("Received message", lastJsonMessage);
+    if (isDebeziumMessage(lastJsonMessage)) {
+      // console.log("Received Debezium message", lastJsonMessage);
+    } else if (isTableUpdate(lastJsonMessage)) {
+      // console.log("Received table update", lastJsonMessage);
+      invalidateQuery(lastJsonMessage.tableName);
+    }
+  }, [invalidateQuery, lastJsonMessage]);
 };
 
 export default useKafkaWebSocket;

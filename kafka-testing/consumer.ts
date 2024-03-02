@@ -1,4 +1,6 @@
 // consumer.ts
+
+// @ts-expect-error kafka has no exported member eachMessage
 import { Kafka, Consumer, eachMessage } from "kafkajs";
 import { CONSUMER_CLIENT_ID, TOPIC } from "./globals";
 

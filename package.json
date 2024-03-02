@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "symlink-resolver": "symlink-resolver"
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0"
+  }
+}

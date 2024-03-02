@@ -1,3 +1,4 @@
+import { QueryKey } from "../queryKeys";
 import { Todo } from "@/schema";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 
@@ -17,7 +18,7 @@ const useAddTodo = () => {
     },
     onSuccess: () => {
       // Invalidate the todos query
-      queryClient.invalidateQueries({ queryKey: ["todos"] });
+      queryClient.invalidateQueries({ queryKey: [QueryKey.Todo] });
     },
   });
 

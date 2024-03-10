@@ -26,9 +26,9 @@ const wsServer = Bun.serve({
     if (server.upgrade(req)) {
       return; // do not return a Response
     }
-    return new Response("Upgrade failed :(", { status: 500 });
+    return new Response("websocket server running", { status: 500 });
   },
-  port: process.env.WEB_SOCKET_PORT,
+  port: process.env.VITE_WEB_SOCKET_SERVER_PORT || 7787,
   websocket: {
     message: function (
       ws: ServerWebSocket<unknown>,
@@ -64,27 +64,32 @@ async function intiKafka() {
 
   await consumer.run({
     eachMessage: async ({ topic, message }) => {
-      const incomingMessage = JSON.parse(message.value?.toString() || "");
-      if (incomingMessage) {
-        if (!wsServer) {
-          console.log("ERROR: wsServer is not set");
-          return;
-        }
-        if (!updateChannel) {
-          console.log("ERROR: updateChannel is not set");
-          return;
-        }
+      try {
+        const incomingMessage = JSON.parse(message.value?.toString() || "");
 
-        if (isDebeziumMessage(incomingMessage)) {
-          console.log("publishing from ", topic, "to ", updateChannel);
-          const tableUpdate: TableUpdate = {
-            tableName: topic.split(".")[2],
-            newData: incomingMessage.payload.after,
-            timeStampMilis: incomingMessage.payload.ts_ms,
-          };
+        if (incomingMessage) {
+          if (!wsServer) {
+            console.log("ERROR: wsServer is not set");
+            return;
+          }
+          if (!updateChannel) {
+            console.log("ERROR: updateChannel is not set");
+            return;
+          }
 
-          wsServer?.publish(updateChannel, JSON.stringify(tableUpdate));
+          if (isDebeziumMessage(incomingMessage)) {
+            console.log("publishing from ", topic, "to ", updateChannel);
+            const tableUpdate: TableUpdate = {
+              tableName: topic.split(".")[2],
+              newData: incomingMessage.payload.after,
+              timeStampMilis: incomingMessage.payload.ts_ms,
+            };
+
+            wsServer?.publish(updateChannel, JSON.stringify(tableUpdate));
+          }
         }
+      } catch (error) {
+        // console.log(error);
       }
     },
   });

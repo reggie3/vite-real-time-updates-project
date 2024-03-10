@@ -1,3 +1,4 @@
+import restClient from "../restClient";
 import { QueryKey } from "../queryKeys";
 import { Todo } from "@/schema";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
@@ -8,13 +9,11 @@ const useAddTodo = () => {
   const response = useMutation({
     mutationKey: ["addTodo"],
     mutationFn: async (todo: Todo) => {
-      return fetch("http://localhost:3000/todos", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(todo),
-      }).then((res) => res.json());
+      // @ts-expect-error Type 'Todo' has no properties in common with type
+      const res = await restClient.todos.post(todo);
+      if (res.error) throw new Error(res.error.message);
+
+      return res.data;
     },
     onSuccess: () => {
       // Invalidate the todos query

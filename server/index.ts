@@ -1,4 +1,8 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Todo } from "@prisma/client";
+import { v4 as uuidv4 } from "uuid";
+import { Elysia } from "elysia";
+import { swagger } from "@elysiajs/swagger";
+import { cors } from "@elysiajs/cors";
 
 const CORS_HEADERS = {
   headers: {
@@ -10,97 +14,58 @@ const CORS_HEADERS = {
 
 const prisma = new PrismaClient();
 
-Bun.serve({
-  fetch(req) {
-    // Handle CORS preflight requests
-    if (req.method === "OPTIONS") {
-      const res = new Response("Departed", CORS_HEADERS);
-      return res;
-    }
+const getTodos = async () => {
+  const todos = await prisma.todo.findMany();
 
-    const url = new URL(req.url);
-    console.log(url.pathname);
-    if (url.pathname === "/") return new Response("Home page!");
-    if (url.pathname === "/todos") return handleTodos(req);
-    if (url.pathname.startsWith("/todos")) {
-      const taskId = url.pathname.split("/")[2];
-      return handleTodoWithId(req, taskId);
-    }
-    return new Response("404!");
-  },
-});
+  return todos;
+};
 
-const handleTodos = async (req: Request) => {
-  switch (req.method) {
-    case "GET":
-      const todos = await prisma.todo.findMany();
-      return new Response(JSON.stringify({ todos }), CORS_HEADERS);
+const getTodo = async (id: string) => {
+  const todo = await prisma.todo.findUnique({
+    where: {
+      id,
+    },
+  });
+  return todo;
+};
 
-    case "POST":
-      if (!req?.headers?.get("content-type")?.includes("application/json")) {
-        return new Response("Invalid content type!", { status: 400 });
-      }
-      const body = await req.json();
-      if (!body.title) {
-        return new Response("Title is required!", { status: 400 });
-      }
+const addTodo = async (body: Todo) => {
+  const transactionId = uuidv4();
 
-      const todo = await prisma.todo.upsert({
-        where: {
-          id: body.id ? body.id : "0",
-        },
-        create: {
-          ...body,
-          id: Math.random().toString(36).substring(7),
-        },
-        update: body,
-      });
-      return new Response(JSON.stringify({ todo }), CORS_HEADERS);
-
-    default:
-      return new Response("404!");
+  try {
+    return await prisma.todo.upsert({
+      where: { id: body.id ?? "0" },
+      create: { ...body, transactionId },
+      update: { ...body, transactionId },
+    });
+  } catch (error) {
+    console.error(error);
+    throw error;
   }
 };
 
-const handleTodoWithId = async (req: Request, todoId: string) => {
-  console.log({ todoId });
+const deleteTodo = async (id: string) => {
+  const transactionId = uuidv4();
 
-  let todo;
+  const todo = await prisma.todo.delete({
+    where: {
+      id,
+    },
+  });
 
-  switch (req.method) {
-    case "DELETE":
-      todo = await prisma.todo.delete({
-        where: {
-          id: todoId,
-        },
-      });
-      break;
-
-    case "PUT":
-      if (!req?.headers?.get("content-type")?.includes("application/json")) {
-        return new Response("Invalid content type!", { status: 400 });
-      }
-      const body = await req.json();
-      todo = await prisma.todo.update({
-        where: {
-          id: todoId,
-        },
-        data: body,
-      });
-      break;
-
-    case "GET":
-      todo = await prisma.todo.findUnique({
-        where: {
-          id: todoId,
-        },
-      });
-
-      break;
-
-    default:
-      return new Response("404!");
-  }
-
-  return new Response(JSON.stringify({ todo }), CORS_HEADERS);
+  return { ...todo, transactionId };
 };
+
+const app = new Elysia()
+  // .use(swagger())
+  .use(cors())
+  .get("/todos", () => getTodos())
+  .get("/todos/:id", ({ params: { id } }) => getTodo(id))
+  .post("/todos", ({ body }) => addTodo(body as Todo))
+  .put("/todos/:id", ({ body }) => addTodo(body as Todo))
+  .delete("/todos/:id", ({ params: { id } }) => deleteTodo(id))
+  .listen(process.env.VITE_REST_SERVER_PORT || 3000);
+
+console.log("rest server started on port ", app.server?.port);
+
+export type App = typeof app;

@@ -19,10 +19,13 @@ services:
     image: confluentinc/cp-kafka:7.3.2
     hostname: kafka1
     container_name: kafka1
+    restart: always
     ports:
       - "9092:9092"
       - "29092:29092"
       - "9999:9999"
+    depends_on:
+      - zoo1
     environment:
       KAFKA_ADVERTISED_HOST_NAME: localhost
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:19092,EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9092,DOCKER://host.docker.internal:29092
@@ -115,7 +118,7 @@ services:
       - bash
       - -c
       - |
-        confluent-hub install --no-prompt debezium/debezium-connector-postgres:latest
+        confluent-hub install --no-prompt debezium/debezium-connector-postgres:2.5.0.Final
         confluent-hub install --no-prompt confluentinc/kafka-connect-datagen:0.4.0
         /etc/confluent/docker/run
 
@@ -241,32 +244,38 @@ services:
       retries: 5
     volumes:
       - ./debezium-debezium-connector-postgresql-2.2.1/lib/debezium-connector-postgres-2.2.1.Final.jar:/kafka-connect-plugins/debezium-connector-postgres-2.2.1.jar
-      - ./connector.json:/connector.json  # Mount the connector.json file
-      - ./init-scripts/create-connector.sh:/docker-entrypoint-initdb.d/create-connector.sh  # Script to create the connector
+      
+
+  debezium-setup:
+    container_name: debezium-setup
+    image: debezium/connect:2.5.2.Final
+    depends_on:
+      debezium:
+        condition: service_healthy
+    restart: "no"
+    volumes: 
+      - type: bind
+        source: ./connector.json
+        target: /connector.json  # Mount the connector.json file
+    entrypoint: 
+    - "bash"
+    - "-c"
+    - |
+      cd .. && 
+      sleep 30 && 
+      curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" --data "@/connector.json" http://debezium:8083/connectors
       
   debezium-ui:
-    image: debezium/debezium-ui:latest
+    image: debezium/debezium-ui:2.5.2.Final
     container_name: debezium-ui
     restart: always
     hostname: debezium-ui
     depends_on:
-      debezium:
-        condition: service_healthy
+      - debezium-setup
     ports:
       - '8080:8080'
     environment:
       KAFKA_CONNECT_URIS: http://debezium:8083
-
-  migrate-database:
-    image: oven/bun:slim
-    container_name: migrate-database
-    depends_on:
-      - pgadmin
-    volumes:
-      - ./server:/app # Assuming your package.json is in the 'server' directory
-    working_dir: /app
-    command: [ "bun", "migrate"]
-
 
 volumes:
   pg_data: {}

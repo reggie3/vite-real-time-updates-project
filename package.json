@@ -1,8 +1,12 @@
 {
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "symlink-resolver": "symlink-resolver"
   },
   "dependencies": {
-    "chokidar": "^3.6.0"
+    "chokidar": "^3.6.0",
+    "leftpad": "^0.0.1"
   }
 }

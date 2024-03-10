@@ -1,7 +1,7 @@
 import restClient from "../restClient";
 import { QueryKey } from "../queryKeys";
-import { Todo } from "@/schema";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { Todo } from "../schema";
 
 const useAddTodo = () => {
   const queryClient = useQueryClient();

@@ -1,14 +1,13 @@
 import restClient from "../restClient";
 import { QueryKey } from "../queryKeys";
 import { useQuery } from "@tanstack/react-query";
-import { Todo } from "../schema";
 
-const useGetTodos = () => {
+const useLogin = () => {
   const query = useQuery({
-    queryKey: [QueryKey.Todo],
-    queryFn: async (): Promise<Todo[]> => {
-      const res = await restClient.todos.get();
-
+    queryKey: [QueryKey.Login],
+    queryFn: async (): Promise<{ username: string }> => {
+      const res = await restClient.login.get();
+      console.log({ res });
       if (res.error) throw new Error(res.error.message);
 
       return res.data;
@@ -18,4 +17,4 @@ const useGetTodos = () => {
   return query;
 };
 
-export default useGetTodos;
+export default useLogin;

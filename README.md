@@ -9,3 +9,7 @@ Create a Debezium connector:
 ```
 curl -X POST --location "http://localhost:8083/connectors" -H "Content-Type: application/json" -H "Accept: application/json" -d @connector.json
 ```
+
+docker build --pull --rm -f "server/dockerfile.server.yaml" -t server:latest "server"
+docker build --pull --rm -f "ws-server/dockerfile.ws-server.yaml" -t ws-server:latest "ws-server"
+docker build --pull --rm -f "ui/dockerfile.ui.yaml" -t ui:latest "ui"

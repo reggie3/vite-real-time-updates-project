@@ -12,7 +12,7 @@ import {
 } from "@mui/material";
 import { titleCase } from "title-case";
 import { useAddTodo } from "../../hooks";
-import { Todo } from "@/schema";
+import { Todo } from "../../schema";
 import { useEffect } from "react";
 
 const TodoForm = () => {

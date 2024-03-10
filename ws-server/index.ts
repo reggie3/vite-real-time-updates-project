@@ -12,7 +12,8 @@ const kafka = new Kafka({
 
 const consumer = kafka.consumer({ groupId: "my-group" });
 const topic = "postgres.public.Todo";
-const updateChannel = process.env.VITE_WEB_SOCKET_UPDATE_CHANNEL;
+const updateChannel =
+  process.env.VITE_WEB_SOCKET_UPDATE_CHANNEL || "update_todos";
 
 if (!updateChannel) {
   console.error("VITE_WEB_SOCKET_UPDATE_CHANNEL is not set");

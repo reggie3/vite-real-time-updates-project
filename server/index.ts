@@ -3,14 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { Elysia } from "elysia";
 import { swagger } from "@elysiajs/swagger";
 import { cors } from "@elysiajs/cors";
-
-const CORS_HEADERS = {
-  headers: {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "OPTIONS, POST, GET, PUT, DELETE",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  },
-};
+import generateUserName from "./src/generateUserName";
 
 const prisma = new PrismaClient();
 
@@ -57,8 +50,11 @@ const deleteTodo = async (id: string) => {
 };
 
 const app = new Elysia()
-  // .use(swagger())
+  .use(swagger())
   .use(cors())
+  .get("/login", () => {
+    return { username: generateUserName() };
+  })
   .get("/todos", () => getTodos())
   .get("/todos/:id", ({ params: { id } }) => getTodo(id))
   .post("/todos", ({ body }) => addTodo(body as Todo))

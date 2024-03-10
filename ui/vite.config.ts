@@ -4,5 +4,13 @@ import { TanStackRouterVite } from "@tanstack/router-vite-plugin";
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@src": "/src",
+      "@components": "/src/components",
+      "@hooks": "/src/hooks",
+      "@routes": "/src/routes",
+    },
+  },
   plugins: [react(), TanStackRouterVite()],
 });

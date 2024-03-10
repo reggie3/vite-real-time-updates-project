@@ -1,4 +1,4 @@
-import { Todo } from "@/schema";
+import { Todo } from "./src/schema";
 import { DebeziumMessage, TableUpdate } from "./globalTypes";
 
 export const isDebeziumMessage = (

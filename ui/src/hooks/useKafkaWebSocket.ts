@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
-import { isDebeziumMessage, isTableUpdate } from "../../../globalTypeGuards";
+import { isDebeziumMessage, isTableUpdate } from "../../globalTypeGuards";
 import useQueryInvalidator from "./useQueryInvalidator";
 
 const useKafkaWebSocket = () => {

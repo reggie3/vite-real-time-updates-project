@@ -8,7 +8,7 @@ import {
   GridValidRowModel,
 } from "@mui/x-data-grid";
 import { Card, CardContent, CardHeader, LinearProgress } from "@mui/material";
-import { Todo } from "@/schema";
+import { Todo } from "../../schema";
 import CompletionStatusCell from "./CompletionStatusCell";
 
 const columns: GridColDef<Todo>[] = [
@@ -73,6 +73,7 @@ const TodoGrid = () => {
           onRowEditStop={handleRowEditStop}
           processRowUpdate={processRowUpdate}
           rows={rows.reverse()}
+          // @ts-expect-error Type 'GridColDef<Todo>[]' is not assignable to type 'readonly GridColDef<GridValidRowModel>[]'.
           columns={columns}
           loading={isLoading}
           density="compact"

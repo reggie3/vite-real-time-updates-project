@@ -1,5 +1,5 @@
 import { useAddTodo } from "../../../hooks";
-import { Todo } from "@/schema";
+import { Todo } from "../../../schema";
 import { Button } from "@mui/material";
 import { GridRenderCellParams } from "@mui/x-data-grid";
 
